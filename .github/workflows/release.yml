@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: macos-14
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: swift test
+
+  build:
+    name: Build ${{ matrix.label }}
+    needs: test
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            label: Intel
+            artifact: release-intel
+            package: VimScroll-macOS-Intel.zip
+          - arch: arm64
+            label: Apple Silicon
+            artifact: release-apple-silicon
+            package: VimScroll-macOS-Apple-Silicon.zip
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build package
+        run: |
+          scripts/build_arch_app.sh \
+            "${{ matrix.arch }}" \
+            "dist/${{ matrix.arch }}" \
+            "${{ steps.version.outputs.value }}" \
+            "${{ github.run_number }}"
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.arch }}/${{ matrix.package }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify release assets
+        shell: bash
+        run: |
+          test -f release-assets/VimScroll-macOS-Intel.zip
+          test -f release-assets/VimScroll-macOS-Apple-Silicon.zip
+          test "$(find release-assets -type f -name '*.zip' | wc -l | tr -d ' ')" = "2"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            release-assets/VimScroll-macOS-Intel.zip \
+            release-assets/VimScroll-macOS-Apple-Silicon.zip \
+            --verify-tag \
+            --generate-notes \
+            --title "VimScroll $GITHUB_REF_NAME"

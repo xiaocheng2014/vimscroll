@@ -132,6 +132,28 @@ swift test
 
 测试覆盖 Vim 风格按键映射和滚动方向向量。涉及辅助功能权限、全局事件和窗口命中的部分需要在真实 macOS 会话中进行集成测试。
 
+## 自动发布
+
+仓库包含 GitHub Actions 发布流程。向远程推送 `v*` 版本标签后，流程会自动：
+
+1. 运行 Swift 测试。
+2. 分别编译 Intel (`x86_64`) 和 Apple Silicon (`arm64`) 应用。
+3. 校验每个应用的目标架构、签名和压缩包完整性。
+4. 创建 GitHub Release 并生成更新说明。
+5. 只上传以下两个安装包：
+
+   - `VimScroll-macOS-Intel.zip`
+   - `VimScroll-macOS-Apple-Silicon.zip`
+
+例如发布 `1.2.0`：
+
+```bash
+git tag -a v1.2.0 -m "VimScroll 1.2.0"
+git push origin v1.2.0
+```
+
+Release 构建会使用标签中的版本号更新应用版本，并使用 GitHub Actions 的运行编号作为应用构建号。
+
 ## 常见问题
 
 ### 菜单栏显示“需要辅助功能权限”
